@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>World Chat</title>
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #1f1c2c, #928dab);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .chat-container {
+      width: 400px;
+      height: 600px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(15px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    h2 {
+      text-align: center;
+      color: #fff;
+      padding: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    #messages {
+      flex-grow: 1;
+      padding: 20px;
+      overflow-y: auto;
+      list-style: none;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message {
+      max-width: 75%;
+      padding: 10px 15px;
+      border-radius: 15px;
+      word-wrap: break-word;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .sent {
+      align-self: flex-end;
+      background: rgba(0, 198, 255, 0.6);
+      color: white;
+      border-top-right-radius: 0;
+    }
+
+    .received {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.2);
+      border-top-left-radius: 0;
+    }
+
+    #input-area {
+      display: flex;
+      padding: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    #msg {
+      flex-grow: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      outline: none;
+    }
+
+    button {
+      margin-left: 10px;
+      padding: 10px 20px;
+      border: none;
+      background: #00c6ff;
+      color: white;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background: #0072ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <h2>World Chat</h2>
+    <ul id="messages"></ul>
+    <div id="input-area">
+      <input id="msg" placeholder="Type your message..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io("http://localhost:5000");
+    let lastSentMessage = "";
+
+    socket.on("connect", () => {
+      console.log("Connected to server");
+    });
+
+    socket.on("message", function(data) {
+      const type = data === lastSentMessage ? "sent" : "received";
+      addMessage(data, type);
+    });
+
+    function sendMessage() {
+      const input = document.getElementById("msg");
+      const msg = input.value.trim();
+      if (msg !== "") {
+        lastSentMessage = msg;
+        socket.send(msg);
+        input.value = "";
+      }
+    }
+
+    function addMessage(text, type) {
+      const item = document.createElement("li");
+      item.textContent = text;
+      item.classList.add("message", type);
+      document.getElementById("messages").appendChild(item);
+    }
+  </script>
+</body>
+</html>

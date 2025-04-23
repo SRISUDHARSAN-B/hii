@@ -1,0 +1,18 @@
+
+services:
+  chat-server:
+    build: ./chat-server
+    ports:
+      - "5000:5000"
+  chat-client1:
+    build: ./chat-client
+    depends_on:
+      - chat-server
+  chat-client2:
+    build: ./chat-client
+    depends_on:
+      - chat-server
+  chat-web:
+    build: ./chat-web
+    ports:
+      - "3000:80"
