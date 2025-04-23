@@ -1,91 +1,90 @@
 pipeline {
-    agent any
+  agent any
 
-    environment {
-        DOCKER_HUB_CREDENTIALS = credentials('dockerhub-credentials')
+  environment {
+    REGISTRY     = 'hariharan1112'
+    CLIENT_IMAGE = "${REGISTRY}/chat-client:latest"
+    SERVER_IMAGE = "${REGISTRY}/chat-server:latest"
+    WEB_IMAGE    = "${REGISTRY}/chat-web:latest"
+    DOCKER_CREDS = 'dockerhub-creds'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        echo '📦 Checking out code...'
+        checkout scm
+      }
     }
 
-    stages {
-
-        stage('Checkout') {
-            steps {
-                echo '📦 Checking out source code...'
-                git 'https://github.com/hariharan1112/chat-app'
-            }
-        }
-
-        stage('Build Docker Images') {
-            steps {
-                script {
-                    def services = ['chat-client', 'chat-server', 'chat-web']
-                    for (service in services) {
-                        dir(service) {
-                            sh """
-                                echo 🛠️ Building ${service}...
-                                docker build -t hariharan1112/${service}:latest .
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Login to Docker Hub') {
-            steps {
-                echo '🔐 Logging into Docker Hub...'
-                sh 'echo "$DOCKER_HUB_CREDENTIALS_PSW" | docker login -u "$DOCKER_HUB_CREDENTIALS_USR" --password-stdin'
-            }
-        }
-
-        stage('Push Docker Images') {
-            steps {
-                script {
-                    def services = ['chat-client', 'chat-server', 'chat-web']
-                    for (service in services) {
-                        sh """
-                            echo 📤 Pushing ${service} to Docker Hub...
-                            docker push hariharan1112/${service}:latest
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Ensure Network') {
-            steps {
-                echo '🔗 Checking or creating Docker network...'
-                sh '''
-                    docker network ls --format {{.Name}} | grep -q ^chat-network$ || docker network create chat-network
-                '''
-            }
-        }
-
-        stage('Deploy Containers') {
-            steps {
-                echo '🚀 Deploying containers...'
-                sh '''
-                    docker rm -f chat-client || true
-                    docker rm -f chat-server || true
-                    docker rm -f chat-web || true
-
-                    docker run -d --network chat-network --name chat-server hariharan1112/chat-server:latest
-                    docker run -d --network chat-network --name chat-client hariharan1112/chat-client:latest
-                    docker run -d --network chat-network -p 8080:80 --name chat-web hariharan1112/chat-web:latest
-                '''
-            }
-        }
-
-        stage('Cleanup') {
-            steps {
-                echo '🧹 Cleaning up unused Docker resources...'
-                sh 'docker system prune -f'
-            }
-        }
-
-        stage('Success') {
-            steps {
-                echo '✅ CI/CD Pipeline completed successfully! Chat App is deployed and running.'
-            }
-        }
+    stage('Ensure Network') {
+      steps {
+        echo '🔗 Ensuring Docker network exists...'
+        sh '''
+          if ! docker network ls --format '{{.Name}}' | grep -q '^chat-network$'; then
+            docker network create chat-network
+          fi
+        '''
+      }
     }
+
+    stage('Build Images') {
+      steps {
+        echo '🛠️ Building Docker images...'
+        script {
+          def services = ['chat-client', 'chat-server', 'chat-web']
+          for (svc in services) {
+            sh """
+              echo "🔨 Building ${svc}..."
+              docker build --network=host -t ${REGISTRY}/${svc}:latest ./${svc}
+            """
+          }
+        }
+      }
+    }
+
+    stage('Push to Docker Hub') {
+      steps {
+        echo '📤 Pushing images to Docker Hub...'
+        withCredentials([usernamePassword(
+          credentialsId: "${DOCKER_CREDS}",
+          usernameVariable: 'DOCKERHUB_USER',
+          passwordVariable: 'DOCKERHUB_PASS'
+        )]) {
+          sh '''
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+            docker push ${CLIENT_IMAGE}
+            docker push ${SERVER_IMAGE}
+            docker push ${WEB_IMAGE}
+          '''
+        }
+      }
+    }
+
+    stage('Deploy') {
+      steps {
+        echo '🚀 Deploying containers...'
+        sh '''
+          docker rm -f chat-client chat-server chat-web || true
+
+          docker run -d --name chat-server --network chat-network -p 5000:5000 ${SERVER_IMAGE}
+          docker run -d --name chat-client --network chat-network -p 3000:3000 ${CLIENT_IMAGE}
+          docker run -d --name chat-web    --network chat-network -p 80:80    ${WEB_IMAGE}
+        '''
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "✅ Deployed all services on chat-network successfully!"
+    }
+    failure {
+      echo "❌ Pipeline failed — check the logs above."
+    }
+    always {
+      echo "🔁 Pipeline execution completed."
+    }
+  }
 }
