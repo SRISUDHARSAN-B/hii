@@ -11,13 +11,14 @@ pipeline {
 
   stages {
     stage('Checkout') {
-      steps { checkout scm }
+      steps {
+        checkout scm
+      }
     }
 
     stage('Ensure Network') {
       steps {
         sh '''
-          # Create network if missing
           if ! docker network ls --format '{{.Name}}' | grep -q '^chat-network$'; then
             docker network create chat-network
           fi
@@ -28,9 +29,10 @@ pipeline {
     stage('Build Images') {
       steps {
         script {
-          ['chat-server','chat-client','chat-web'].each { svc ->
+          def services = ['chat-client', 'chat-server', 'chat-web']
+          for (svc in services) {
             sh """
-              echo "Building ${svc}..."
+              echo "🔨 Building ${svc}..."
               docker build --network=host -t ${REGISTRY}/${svc}:latest ./${svc}
             """
           }
@@ -41,7 +43,7 @@ pipeline {
     stage('Push to Docker Hub') {
       steps {
         withCredentials([usernamePassword(
-          credentialsId: DOCKER_CREDS,
+          credentialsId: "${DOCKER_CREDS}",
           usernameVariable: 'DOCKERHUB_USER',
           passwordVariable: 'DOCKERHUB_PASS'
         )]) {
@@ -58,10 +60,8 @@ pipeline {
     stage('Deploy') {
       steps {
         sh '''
-          # Remove old
           docker rm -f chat-client chat-server chat-web || true
 
-          # Run on chat-network
           docker run -d --name chat-server --network chat-network -p 5000:5000 ${SERVER_IMAGE}
           docker run -d --name chat-client --network chat-network -p 3000:3000 ${CLIENT_IMAGE}
           docker run -d --name chat-web    --network chat-network -p 80:80    ${WEB_IMAGE}
@@ -71,7 +71,11 @@ pipeline {
   }
 
   post {
-    success { echo "✅ Deployed all services on chat-network!" }
-    failure { echo "❌ Pipeline failed—check the logs above." }
+    success {
+      echo "✅ Deployed all services on chat-network!"
+    }
+    failure {
+      echo "❌ Pipeline failed—check the logs above."
+    }
   }
 }
