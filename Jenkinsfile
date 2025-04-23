@@ -1,11 +1,9 @@
 pipeline {
     agent any
-
     environment {
-        DOCKER_IMAGE_CLIENT = 'hariharan1112/chat-client:latest'
-        DOCKER_IMAGE_SERVER = 'hariharan1112/chat-server:latest'
+        DOCKER_IMAGE_NAME_CLIENT = 'hariharan1112/chat-client'
+        DOCKER_IMAGE_NAME_SERVER = 'hariharan1112/chat-server'
     }
-
     stages {
         stage('Checkout SCM') {
             steps {
@@ -13,45 +11,50 @@ pipeline {
             }
         }
 
-        stage('Clone Repository') {
-            steps {
-                sh 'rm -rf ChatApp || true'
-                sh 'git clone https://github.com/your-username/ChatApp.git'
-            }
-        }
-
         stage('Build Docker Images') {
             steps {
-                dir('ChatApp/chat-client') {
-                    sh 'docker build -t ${DOCKER_IMAGE_CLIENT} .'
-                }
-                dir('ChatApp/chat-server') {
-                    sh 'docker build -t ${DOCKER_IMAGE_SERVER} .'
+                script {
+                    // Clean up old images
+                    sh 'rm -rf ChatApp'
+                    // Clone the repository
+                    sh 'git clone https://github.com/HARIHARANJAYARAJ/hii.git'
+                    dir('ChatApp') {
+                        // Build Docker images
+                        sh '''
+                            docker build -t $DOCKER_IMAGE_NAME_CLIENT ./client
+                            docker build -t $DOCKER_IMAGE_NAME_SERVER ./server
+                        '''
+                    }
                 }
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
-                    sh '''
-                        echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
-                        docker push ${DOCKER_IMAGE_CLIENT}
-                        docker push ${DOCKER_IMAGE_SERVER}
-                    '''
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                 usernameVariable: 'DOCKERHUB_USER',
+                                                 passwordVariable: 'DOCKERHUB_PASS')]) {
+                    script {
+                        // Log in to Docker Hub
+                        sh '''
+                            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+                            docker push $DOCKER_IMAGE_NAME_CLIENT:latest
+                            docker push $DOCKER_IMAGE_NAME_SERVER:latest
+                        '''
+                    }
                 }
             }
         }
 
         stage('Deploy Containers') {
             steps {
-                sh '''
-                    docker rm -f chat-client || true
-                    docker rm -f chat-server || true
-
-                    docker run -d --name chat-client -p 3000:3000 ${DOCKER_IMAGE_CLIENT}
-                    docker run -d --name chat-server -p 5000:5000 ${DOCKER_IMAGE_SERVER}
-                '''
+                script {
+                    // Deploy the Docker containers (example using Docker Compose or kubectl)
+                    sh '''
+                        docker run -d --name chat-client -p 80:80 $DOCKER_IMAGE_NAME_CLIENT:latest
+                        docker run -d --name chat-server -p 5000:5000 $DOCKER_IMAGE_NAME_SERVER:latest
+                    '''
+                }
             }
         }
     }
