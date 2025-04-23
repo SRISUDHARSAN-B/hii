@@ -8,7 +8,7 @@ pipeline {
     stages {
         stage('Clone Repository') {
             steps {
-                git 'https://github.com/HARIHARANJAYARAJ/realtime-docker-chat-app.git'
+                git url: 'https://github.com/HARIHARANJAYARAJ/hii.git', branch: 'main', credentialsId: 'github-pat'
             }
         }
 
@@ -17,7 +17,7 @@ pipeline {
                 script {
                     def services = ['chat-client', 'chat-server', 'chat-web']
                     services.each { service ->
-                        sh "docker build -t $REGISTRY/${service}:latest realtime-docker-chat-app/${service}"
+                        sh "docker build -t $REGISTRY/${service}:latest ${service}"
                     }
                 }
             }
@@ -38,7 +38,7 @@ pipeline {
 
         stage('Deploy Using Docker Compose') {
             steps {
-                sh 'docker-compose -f realtime-docker-chat-app/docker-compose.yml up -d'
+                sh 'docker-compose up -d'
             }
         }
     }
