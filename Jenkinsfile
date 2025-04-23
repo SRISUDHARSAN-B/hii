@@ -6,24 +6,32 @@ pipeline {
     CLIENT_IMAGE = "${REGISTRY}/chat-client:latest"
     SERVER_IMAGE = "${REGISTRY}/chat-server:latest"
     WEB_IMAGE    = "${REGISTRY}/chat-web:latest"
+    DOCKER_CREDS = 'dockerhub-creds'
   }
 
   stages {
     stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Ensure Network') {
       steps {
-        checkout scm
+        sh '''
+          # Create network if missing
+          if ! docker network ls --format '{{.Name}}' | grep -q '^chat-network$'; then
+            docker network create chat-network
+          fi
+        '''
       }
     }
 
-    stage('Build Docker Images') {
+    stage('Build Images') {
       steps {
         script {
-          // Build each service with host networking (so DNS works)
-          ['chat-client','chat-server','chat-web'].each { svc ->
+          ['chat-server','chat-client','chat-web'].each { svc ->
             sh """
-              echo "— Building ${svc} —"
-              docker build --network=host \\
-                -t ${REGISTRY}/${svc}:latest ./${svc}
+              echo "Building ${svc}..."
+              docker build --network=host -t ${REGISTRY}/${svc}:latest ./${svc}
             """
           }
         }
@@ -33,14 +41,12 @@ pipeline {
     stage('Push to Docker Hub') {
       steps {
         withCredentials([usernamePassword(
-          credentialsId: 'dockerhub-creds',
+          credentialsId: DOCKER_CREDS,
           usernameVariable: 'DOCKERHUB_USER',
           passwordVariable: 'DOCKERHUB_PASS'
         )]) {
           sh '''
-            echo "$DOCKERHUB_PASS" \
-              | docker login -u "$DOCKERHUB_USER" --password-stdin
-
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
             docker push ${CLIENT_IMAGE}
             docker push ${SERVER_IMAGE}
             docker push ${WEB_IMAGE}
@@ -49,21 +55,23 @@ pipeline {
       }
     }
 
-    stage('Deploy Containers') {
+    stage('Deploy') {
       steps {
         sh '''
+          # Remove old
           docker rm -f chat-client chat-server chat-web || true
 
-          docker run -d --name chat-client -p 3000:3000 ${CLIENT_IMAGE}
-          docker run -d --name chat-server -p 5000:5000 ${SERVER_IMAGE}
-          docker run -d --name chat-web    -p 80:80    ${WEB_IMAGE}
+          # Run on chat-network
+          docker run -d --name chat-server --network chat-network -p 5000:5000 ${SERVER_IMAGE}
+          docker run -d --name chat-client --network chat-network -p 3000:3000 ${CLIENT_IMAGE}
+          docker run -d --name chat-web    --network chat-network -p 80:80    ${WEB_IMAGE}
         '''
       }
     }
   }
 
   post {
-    success { echo "✅ Pipeline succeeded — your chat app is live!" }
-    failure { echo "❌ Pipeline failed. Check above logs." }
+    success { echo "✅ Deployed all services on chat-network!" }
+    failure { echo "❌ Pipeline failed—check the logs above." }
   }
 }
