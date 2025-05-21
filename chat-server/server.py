@@ -1,4 +1,3 @@
-
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
 
@@ -12,4 +11,5 @@ def handle_message(data):
     emit('message', data, broadcast=True)
 
 if __name__ == '__main__':
+    # Using 0.0.0.0 to listen on all available network interfaces inside the container
     socketio.run(app, host='0.0.0.0', port=5000)

@@ -1,4 +1,3 @@
-
 import time
 import socketio
 
@@ -13,5 +12,5 @@ def connect():
 def message(data):
     print("I received a message!", data)
 
-sio.connect('http://chat-server:5000')
+sio.connect('http://chat-server:5000') # Connects to the chat-server service within the Docker network
 sio.wait()
